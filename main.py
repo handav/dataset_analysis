@@ -12,10 +12,15 @@ from collections import Counter
 #which is the least emotional image? has the highest % none?
 #emotions by region of US?
 #average number of emotion tags?
+#top emotions per category
+#top emotions that don't have any of the opposite (pos, neg) emotions associated
 
 path_to_saved_images = '/Volumes/Seagate Backup Plus Drive/Hannah_Data/Datasets/AI_Grant/'
 aggregated_results_csv = '../cf_report_1230552_aggregated.csv'
 all_emotion_options = ['anger', 'anticipation', 'disgust', 'fear', 'joy', 'sadness', 'surprise', 'trust', 'none']
+positive_emotions = ['joy', 'trust']
+negative_emotions = ['anger', 'disgust', 'fear', 'sadness']
+neutral_emotions = ['anticipation', 'surprise', 'none']
 
 #keyword_index = 14
 keyword_options = ['city', 'field', 'forest', 'mountain', 'ocean', 'lake', 'road']
@@ -50,27 +55,36 @@ def show_image():
     cv2.imshow('image',img)
     cv2.waitKey(400)
 
-# def process_url(url, keyword, emotions):
-#     global current_image_name
-#     global current_image_counter
-#     image_filename = url.split('.com/')[1].split('/')[1]
-#     if current_image_name == image_filename:
-#         current_image_counter = current_image_counter + 1
-#     else:
-#         current_image_counter = 1
-#     current_image_name = image_filename
-#     #if there are more than 2 emotions, split up the text display
-#     if len(emotions.split(',')) > 3:
-#         separated_emotions = [', '.join(emotions.split(',')[0:2]), ', '.join(emotions.split(',')[2:])]
-#         emotions = separated_emotions
-#         print len(emotions)
+#same as proportion
+def weight_by_percentage(entries):
+    number_emotions = 0.0
+    for entry in entries:
+        if '|' in entry:
+            number_emotions = number_emotions + len(entry.split('|'))
+        else:
+            number_emotions = number_emotions + 1.0
+    print 'num', number_emotions
+    weight = (100.0*float(len(entries)))/number_emotions
+    print weight
+    weighted_emotions = {}
+    for entry in entries: 
+        if '|' in entry:
+            for emotion in entry.split('|'):
+                if emotion in weighted_emotions:
+                    weighted_emotions[emotion] = weighted_emotions[emotion] + weight
+                else:
+                    weighted_emotions[emotion] = weight
+        else:
+            emotion = entry
+            if emotion in weighted_emotions:
+                weighted_emotions[emotion] = weighted_emotions[emotion] + weight
+            else:
+                weighted_emotions[emotion] = weight
+    # for e in weighted_emotions.keys():
+    #     weighted_emotions[e] = float(weighted_emotions[e])/float(len(entries))
+    return weighted_emotions
 
-#     path_to_img = path_to_saved_images + keyword + '/'+image_filename
-#     img = cv2.imread(path_to_img,1)
-
-
-
-
+#same as percentage
 def weight_by_proportion(entries):
     weighted_emotions = {}
     for entry in entries: 
@@ -123,7 +137,7 @@ def parse_results(emotion_types_index, image_url_index):
         if i > 0:
             all_emotions = []
             entries = result[emotion_types_index].split('\n')
-            weighted_emotions = weight_by_proportion(entries)
+            weighted_emotions = weight_by_accumulation(entries)
             for entry in entries:    
                 if '|' in entry:
                     for emotion in entry.split('|'):
@@ -134,33 +148,59 @@ def parse_results(emotion_types_index, image_url_index):
             #result_name = parse_name_from_url(result[image_url_index])
             result_name = result[image_url_index]
             all_weighted_emotions[result_name] = weighted_emotions
-    find_extremes(all_weighted_emotions)
+    find_extreme_and_unique(all_weighted_emotions)
 
 def find_extremes(all_weighted_emotions):
     temporary_highest_values = {}
     for o in all_emotion_options:
         temporary_highest_values[o] = 0.0
     for key, value in all_weighted_emotions.iteritems():
-        #print value
         for k in value.keys():
-            # print k
-            # print value[k]
             if temporary_highest_values[k] < float(value[k]):
                 temporary_highest_values[k] = value[k]
-    print temporary_highest_values
 
-    # highest_values = {}
-    # for o in all_emotion_options:
-    #     highest_values[o] = []
-    # for image_name, weighted_emotion in all_weighted_emotions.iteritems():
-    #     for key in weighted_emotion.keys():
-    #         if weighted_emotion[key] == 100.0:
-    #             highest_values[key].append(weighted_emotion)
+    highest_values = {}
+    for o in all_emotion_options:
+        highest_values[o] = []
+    for image_name, weighted_emotion in all_weighted_emotions.iteritems():
+        for key in weighted_emotion.keys():
+            if weighted_emotion[key] == temporary_highest_values[key]:
+                highest_values[key].append({image_name: weighted_emotion})
 
-    # for item in highest_values:
-    #     print item
-    #     print len(highest_values[item])
-    # print temporary_highest_values
+    for emotion in highest_values:
+        print emotion
+        print highest_values[emotion]
+
+def find_extreme_and_unique(all_weighted_emotions):
+    temporary_highest_values = {}
+    for o in all_emotion_options:
+        temporary_highest_values[o] = 0.0
+    for key, value in all_weighted_emotions.iteritems():
+        for k in value.keys():
+            if temporary_highest_values[k] < float(value[k]):
+                temporary_highest_values[k] = value[k]
+
+    highest_values = {}
+    for o in all_emotion_options:
+        highest_values[o] = []
+
+    for image_name, weighted_emotion in all_weighted_emotions.iteritems():
+        is_unique = 0
+        for key in weighted_emotion.keys():
+            if weighted_emotion[key] == temporary_highest_values[key]:
+                is_unique = is_unique + 1
+                #highest_values[key].append({image_name: weighted_emotion})
+        if is_unique == 1:
+            for key in weighted_emotion.keys():
+                if weighted_emotion[key] == temporary_highest_values[key]:
+                    #is_unique = is_unique + 1
+                    highest_values[key].append({image_name: weighted_emotion})
+
+
+    for emotion in highest_values:
+        print emotion
+        print highest_values[emotion]
+        print '\n'
 
 def process_emotions(emotions):
     if '\n' in emotions:
